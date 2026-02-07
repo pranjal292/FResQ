@@ -1,0 +1,25 @@
+/* src/index.css */
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+/* Ensure the body and root take up full height and width without margins */
+body, html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden; /* Prevent double scrollbars */
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  /* Remove any default max-width or centering from Vite */
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+}
