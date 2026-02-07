@@ -13,7 +13,7 @@ class VRPSolver:
 
     def solve_route(self, data):
         nodes = []
-        # Node 0: Depot (Driver Start)
+        
         nodes.append({
             "lat": data.vehicle.start_location.lat, 
             "lon": data.vehicle.start_location.lon,
@@ -46,7 +46,7 @@ class VRPSolver:
             d_idx = manager.NodeToIndex(2 + (i * 2))
             routing.AddPickupAndDelivery(p_idx, d_idx)
             routing.solver().Add(distance_dimension.CumulVar(p_idx) <= distance_dimension.CumulVar(d_idx))
-            # Force visit
+            
             routing.AddDisjunction([p_idx], 10000000)
             routing.AddDisjunction([d_idx], 10000000)
 
@@ -63,21 +63,22 @@ class VRPSolver:
                 node_idx = manager.IndexToNode(index)
                 node = nodes[node_idx]
                 
-                # CRITICAL FIX: Always include the start node so the map draws the line from the driver
+               
                 loc_id = "DEPOT" if node['type'] == 'start' else f"{node['id']}_{node['type']}"
                 route.append({"location_id": loc_id, "type": node["type"], "arrival_time": 0})
                 
                 index = solution.Value(routing.NextVar(index))
                 
-            # Add final destination
+            
             node_idx = manager.IndexToNode(index)
             node = nodes[node_idx]
             loc_id = "DEPOT" if node['type'] == 'start' else f"{node['id']}_{node['type']}"
             route.append({"location_id": loc_id, "type": node["type"], "arrival_time": 0})
         else:
-            # Fallback
+            
             for node in nodes:
                 loc_id = "DEPOT" if node['type'] == 'start' else f"{node['id']}_{node['type']}"
                 route.append({"location_id": loc_id, "type": node["type"], "arrival_time": 0})
+
 
         return route, 0
