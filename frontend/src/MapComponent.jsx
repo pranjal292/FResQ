@@ -7,39 +7,48 @@ import 'leaflet-polylinedecorator';
 
 // --- CUSTOM PINS ---
 const createPin = (type) => {
-  let color = '#3b82f6';
+  let color = '#3b82f6'; 
   let icon = 'fas fa-car';
   
   if (type === 'pickup') { color = '#2ecc71'; icon = 'fas fa-box'; } 
   if (type === 'delivery') { color = '#e74c3c'; icon = 'fas fa-flag-checkered'; } 
 
   const css = `
-    width: 32px; height: 32px;
-    background: ${color};
-    border-radius: 50% 50% 50% 0;
-    transform: rotate(-45deg);
-    position: absolute; left: 50%; top: 50%;
-    margin: -16px 0 0 -16px;
-    box-shadow: -3px 5px 8px rgba(0,0,0,0.6);
+    background-color: ${color};
+    width: 30px; height: 30px;
     display: flex; justify-content: center; align-items: center;
-    border: 2px solid white;
+    border-radius: 30px 30px 0;
+    transform: rotate(45deg);
+    border: 2px solid #FFFFFF;
+    box-shadow: 1px 1px 4px rgba(0,0,0,0.5);
   `;
   
-  const iconCss = `
-    transform: rotate(45deg);
-    color: white; font-size: 14px;
-  `;
+  const iconCss = `transform: rotate(-45deg); color: white; font-size: 14px;`;
 
   return L.divIcon({
-    className: 'custom-pin',
+    className: 'custom-pin-icon',
     html: `<div style="${css}"><i class="${icon}" style="${iconCss}"></i></div>`,
-    iconSize: [32, 42],
-    iconAnchor: [16, 42],
+    iconSize: [30, 42],
+    iconAnchor: [15, 42],
     popupAnchor: [0, -35]
   });
 };
 
-// --- ARROWS COMPONENT ---
+// --- HELPER TO HANDLE THEME CHANGE ---
+const TileLayerHandler = ({ darkMode }) => {
+    const map = useMap();
+    const darkUrl = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+    const lightUrl = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+    
+    // We render a standard TileLayer, changing the URL prop will auto-update
+    return (
+        <TileLayer 
+            url={darkMode ? darkUrl : lightUrl} 
+            attribution='&copy; OpenStreetMap &copy; CARTO'
+        />
+    );
+};
+
 const RouteArrows = ({ positions }) => {
   const map = useMap();
   useEffect(() => {
@@ -47,11 +56,7 @@ const RouteArrows = ({ positions }) => {
     const decorator = L.polylineDecorator(positions, {
       patterns: [{
           offset: '5%', repeat: '80px',
-          symbol: L.Symbol.arrowHead({ 
-            pixelSize: 14, 
-            polygon: true, 
-            pathOptions: { stroke: false, fill: true, color: '#ffffff', fillOpacity: 1 } 
-          })
+          symbol: L.Symbol.arrowHead({ pixelSize: 14, polygon: true, pathOptions: { stroke: false, fill: true, color: '#ffffff', fillOpacity: 1 } })
       }]
     });
     decorator.addTo(map);
@@ -61,47 +66,33 @@ const RouteArrows = ({ positions }) => {
 };
 
 // --- MAIN COMPONENT ---
-const MapComponent = ({ route, locations }) => {
+const MapComponent = ({ route, locations, darkMode }) => {
   const [routePath, setRoutePath] = useState([]);
   const [ngos, setNgos] = useState([]);
-  const defaultCenter = [25.1825, 75.8236]; // Kota
+  const defaultCenter = [25.1825, 75.8236]; 
 
-  // 1. Fetch NGOs ONCE on load (Permanent Visibility)
   useEffect(() => {
     axios.get('http://localhost:8000/api/ngos')
       .then(res => setNgos(res.data))
       .catch(err => console.error("Failed to fetch NGOs", err));
   }, []);
 
-  // 2. Calculate Route Shape (OSRM)
   useEffect(() => {
-    if (!route || route.length < 1) { 
-        setRoutePath([]); 
-        return; 
-    }
-
-    // Extract lat/lon from route locations
+    if (!route || route.length < 1) { setRoutePath([]); return; }
     const waypoints = route.map(point => locations[point.location_id]).filter(Boolean);
-    
-    // Add Driver Start (Depot) if available
     if (locations["DEPOT"]) waypoints.unshift(locations["DEPOT"]);
-
     if (waypoints.length < 2) return;
 
     const fetchRoadShape = async () => {
       try {
-        const coordinatesString = waypoints.map(loc => `${loc.lon},${loc.lat}`).join(';');
-        const url = `https://router.project-osrm.org/route/v1/driving/${coordinatesString}?overview=full&geometries=geojson`;
+        const coords = waypoints.map(loc => `${loc.lon},${loc.lat}`).join(';');
+        const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
         const response = await axios.get(url);
-        
         if (response.data.routes && response.data.routes.length > 0) {
-            const geoJsonCoords = response.data.routes[0].geometry.coordinates;
-            setRoutePath(geoJsonCoords.map(coord => [coord[1], coord[0]])); // Flip to LatLng
+            const geo = response.data.routes[0].geometry.coordinates;
+            setRoutePath(geo.map(c => [c[1], c[0]]));
         }
-      } catch (error) { 
-          // Fallback: Straight lines if OSRM fails
-          setRoutePath(waypoints.map(w => [w.lat, w.lon])); 
-      }
+      } catch (error) { setRoutePath(waypoints.map(w => [w.lat, w.lon])); }
     };
     fetchRoadShape();
   }, [route, locations]);
@@ -109,29 +100,20 @@ const MapComponent = ({ route, locations }) => {
   const center = routePath.length > 0 ? routePath[0] : defaultCenter;
 
   return (
-    <MapContainer key={center.join(',')} center={center} zoom={13} style={{ height: "100%", width: "100%", background: '#000' }}>
-      {/* Dark Theme Tiles */}
-      <TileLayer 
-        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" 
-        attribution='&copy; OpenStreetMap &copy; CARTO'
-      />
+    <MapContainer key={center.join(',')} center={center} zoom={13} style={{ height: "100%", width: "100%", background: darkMode ? '#1a1a1a' : '#ddd' }}>
+      
+      {/* Dynamic Tile Layer */}
+      <TileLayerHandler darkMode={darkMode} />
 
-      {/* --- LAYER 1: STATIC NGOs (White/Red Dots) --- */}
       {ngos.map((ngo, idx) => (
         <CircleMarker 
-            key={`ngo-${idx}`} 
-            center={[ngo.lat, ngo.lon]} 
-            radius={5} 
+            key={`ngo-${idx}`} center={[ngo.lat, ngo.lon]} radius={5} 
             pathOptions={{ color: '#666', weight: 1, fillColor: '#fff', fillOpacity: 0.8 }}
         >
-            <Popup>
-                <b style={{color:'black'}}>NGO: {ngo.name}</b><br/>
-                <span style={{color:'black'}}>{ngo.city}</span>
-            </Popup>
+            <Popup><b style={{color:'black'}}>NGO: {ngo.name}</b></Popup>
         </CircleMarker>
       ))}
 
-      {/* --- LAYER 2: ROUTE LINE --- */}
       {routePath.length > 0 && (
         <>
           <Polyline positions={routePath} color="#ff6b00" weight={6} opacity={0.8} />
@@ -139,23 +121,18 @@ const MapComponent = ({ route, locations }) => {
         </>
       )}
 
-      {/* --- LAYER 3: DYNAMIC PINS (Pickups & Drops) --- */}
       {route && route.map((point, idx) => {
         const loc = locations[point.location_id];
-        if (!loc) return null;
-        
-        // Skip rendering start point if it's just the driver location (optional)
-        if (point.type === 'start') return null;
+        if (!loc || point.type === 'start') return null;
 
         return (
           <Marker 
-            key={`stop-${idx}`} 
-            position={[loc.lat, loc.lon]} 
-            icon={createPin(point.type)}
+            key={`stop-${idx}`} position={[loc.lat, loc.lon]} icon={createPin(point.type)} zIndexOffset={1000}
           >
             <Popup>
-                <b style={{color:'black'}}>{point.type.toUpperCase()}</b><br/>
-                <span style={{color:'black'}}>Stop #{idx}</span>
+                <div style={{color:'black', textAlign:'center'}}>
+                   <b>{point.type.toUpperCase()}</b><br/>Step #{idx}
+                </div>
             </Popup>
           </Marker>
         );
